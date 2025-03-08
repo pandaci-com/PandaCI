@@ -5,14 +5,14 @@ import (
 	"net/http"
 	"strconv"
 
-	gitShared "github.com/pandaci-com/pandaci/app/git/shared"
-	"github.com/pandaci-com/pandaci/pkg/utils/env"
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/google/go-github/v68/github"
+	gitShared "github.com/pandaci-com/pandaci/app/git/shared"
+	"github.com/pandaci-com/pandaci/pkg/utils/env"
 )
 
 // TODO - We should cache these clients to avoid having to regenerate access tokens
-func (c *GithubClient) newInstallationClient(ctx context.Context, installationID string) (*GithubInstallationClient, error) {
+func (c *GithubClient) NewGithubInstallationClient(ctx context.Context, installationID string) (*GithubInstallationClient, error) {
 	appID, err := env.GetGithubAppID()
 	if err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (c *GithubClient) newInstallationClient(ctx context.Context, installationID
 	}
 
 	return &GithubInstallationClient{
-		githubClient:   client,
+		Client:         client,
 		installationID: installationID,
 		gitClient:      c,
 		graphqlClient:  graphqlClient,
@@ -49,7 +49,7 @@ func (c *GithubClient) newInstallationClient(ctx context.Context, installationID
 }
 
 func (c *GithubClient) NewInstallationClient(ctx context.Context, installationID string) (gitShared.InstallationClient, error) {
-	return c.newInstallationClient(ctx, installationID)
+	return c.NewGithubInstallationClient(ctx, installationID)
 }
 
 func (c *GithubClient) NewAppClient(ctx context.Context) (gitShared.AppClient, error) {

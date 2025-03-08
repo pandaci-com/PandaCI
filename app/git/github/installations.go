@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/google/go-github/v68/github"
 	gitShared "github.com/pandaci-com/pandaci/app/git/shared"
 	"github.com/pandaci-com/pandaci/types"
 	typesHTTP "github.com/pandaci-com/pandaci/types/http"
-	"github.com/google/go-github/v68/github"
 )
 
 func (c *GithubAppClient) GetInstallation(ctx context.Context, installationID string) (*typesHTTP.GitInstallation, error) {
@@ -40,7 +40,7 @@ func (c *GithubAppClient) GetInstallation(ctx context.Context, installationID st
 }
 
 func (c *GithubInstallationClient) GetUserIDFromUsername(ctx context.Context, username string) (int64, error) {
-	user, _, err := c.githubClient.Users.Get(ctx, username)
+	user, _, err := c.Client.Users.Get(ctx, username)
 	if err != nil {
 		return 0, err
 	}

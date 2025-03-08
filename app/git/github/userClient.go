@@ -11,17 +11,17 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/go-github/v68/github"
 	gitShared "github.com/pandaci-com/pandaci/app/git/shared"
 	"github.com/pandaci-com/pandaci/pkg/utils/env"
 	"github.com/pandaci-com/pandaci/platform/identity"
 	"github.com/pandaci-com/pandaci/types"
 	typesDB "github.com/pandaci-com/pandaci/types/database"
-	"github.com/google/go-github/v68/github"
 	"github.com/rs/zerolog/log"
 )
 
 func (c *GithubClient) getUserRedirect(ctx context.Context, user types.User, account *typesDB.UserAccount) (string, error) {
-	refreshState, err := c.queries.CreateAccountRefreshState(ctx, account)
+	refreshState, err := c.Queries.CreateAccountRefreshState(ctx, account)
 	if err != nil {
 		return "", err
 	}
@@ -170,11 +170,11 @@ func (c *GithubClient) RefreshOAuthTokens(ctx context.Context, user types.User, 
 		account.ProviderAccountID = strconv.Itoa(int(githubUser.GetID()))
 	}
 
-	return c.queries.UpsertAccount(ctx, account)
+	return c.Queries.UpsertAccount(ctx, account)
 }
 
 func (c *GithubClient) NewUserClient(ctx context.Context, user types.User) (gitShared.UserClient, error) {
-	account, err := c.queries.GetUserAccountByType(ctx, user, typesDB.UserAccountTypeGithub)
+	account, err := c.Queries.GetUserAccountByType(ctx, user, typesDB.UserAccountTypeGithub)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	} else if err == sql.ErrNoRows {
@@ -235,7 +235,7 @@ func (c *GithubClient) NewUserClient(ctx context.Context, user types.User) (gitS
 	client := github.NewClient(httpClient).WithAuthToken(account.AccessToken)
 
 	return &GithubUserClient{
-		queries:      c.queries,
+		queries:      c.Queries,
 		githubClient: client,
 		gitClient:    c,
 	}, nil

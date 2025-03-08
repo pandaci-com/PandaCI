@@ -8,11 +8,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-playground/webhooks/v6/github"
+	ghAPI "github.com/google/go-github/v68/github"
+	"github.com/labstack/echo/v4"
+	gitGithub "github.com/pandaci-com/pandaci/app/git/github"
 	"github.com/pandaci-com/pandaci/pkg/utils/env"
 	"github.com/pandaci-com/pandaci/types"
 	typesDB "github.com/pandaci-com/pandaci/types/database"
-	"github.com/go-playground/webhooks/v6/github"
-	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
 )
 
@@ -137,6 +139,31 @@ func (h *Handler) handlePullRequestEvent(ctx context.Context, payload github.Pul
 	if err != nil {
 		// TODO - we should trigger a sync of the git provider
 		log.Error().Err(err).Msg("Git provider not found")
+		return
+	}
+
+	if payload.PullRequest.Head.Repo.ID != payload.Repository.ID {
+		log.Error().Msg("Forks are not currently supported")
+
+		ghClient := gitGithub.GithubClient{
+			Queries: h.queries,
+		}
+
+		installClient, err := ghClient.NewGithubInstallationClient(ctx, strconv.FormatInt(int64(payload.Installation.ID), 10))
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to get github installation client")
+			return
+		}
+
+		if _, _, err := installClient.Client.Repositories.CreateStatus(ctx, payload.Repository.Owner.Login, payload.Repository.Name, payload.PullRequest.Head.Sha, &ghAPI.RepoStatus{
+			State:       types.Pointer("failure"),
+			Description: types.Pointer("Pull requests from forks are not currently supported"),
+			Context:     types.Pointer("PandaCI"),
+			TargetURL:   types.Pointer("https://pandaci.com/docs/platform/workflows/env#git-fork-protection"),
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to create status")
+		}
+
 		return
 	}
 

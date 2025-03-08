@@ -1,14 +1,14 @@
 package gitGithub
 
 import (
-	gitShared "github.com/pandaci-com/pandaci/app/git/shared"
-	"github.com/pandaci-com/pandaci/app/queries"
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/google/go-github/v68/github"
+	gitShared "github.com/pandaci-com/pandaci/app/git/shared"
+	"github.com/pandaci-com/pandaci/app/queries"
 )
 
 type GithubClient struct {
-	queries *queries.Queries
+	Queries *queries.Queries
 }
 
 type GithubUserClient struct {
@@ -23,7 +23,7 @@ type GithubAppClient struct {
 }
 
 type GithubInstallationClient struct {
-	githubClient   *github.Client
+	Client         *github.Client
 	gitClient      *GithubClient
 	installationID string
 	graphqlClient  *graphqlClient
@@ -36,6 +36,6 @@ type graphqlClient struct {
 
 func NewGithubClient(queries *queries.Queries) (gitShared.Client, error) {
 	return &GithubClient{
-		queries: queries,
+		Queries: queries,
 	}, nil
 }

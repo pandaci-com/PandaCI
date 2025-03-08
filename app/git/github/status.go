@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/google/go-github/v68/github"
 	"github.com/pandaci-com/pandaci/types"
 	typesDB "github.com/pandaci-com/pandaci/types/database"
-	"github.com/google/go-github/v68/github"
 	"github.com/rs/zerolog/log"
 )
 
@@ -42,7 +42,7 @@ func (c *GithubInstallationClient) UpdateRunInRepo(ctx context.Context, org type
 		return err
 	}
 
-	repo, _, err := c.githubClient.Repositories.GetByID(ctx, repoID)
+	repo, _, err := c.Client.Repositories.GetByID(ctx, repoID)
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func (c *GithubInstallationClient) UpdateRunInRepo(ctx context.Context, org type
 		description = "PandaCI is running your workflow"
 	}
 
-	_, _, err = c.githubClient.Repositories.CreateStatus(ctx, repo.Owner.GetLogin(), repo.GetName(), run.GitSha, &github.RepoStatus{
+	_, _, err = c.Client.Repositories.CreateStatus(ctx, repo.Owner.GetLogin(), repo.GetName(), run.GitSha, &github.RepoStatus{
 		TargetURL:   types.Pointer(fmt.Sprintf("https://app.pandaci.com/%s/%s/runs/%d", org.Slug, project.Slug, run.Number)),
 		State:       &status,
 		Description: types.Pointer(description),

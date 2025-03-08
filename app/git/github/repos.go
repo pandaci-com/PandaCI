@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/google/go-github/v68/github"
 	gitShared "github.com/pandaci-com/pandaci/app/git/shared"
 	"github.com/pandaci-com/pandaci/types"
 	typesDB "github.com/pandaci-com/pandaci/types/database"
 	typesHTTP "github.com/pandaci-com/pandaci/types/http"
-	"github.com/google/go-github/v68/github"
 )
 
 func formatRepos(repos []*github.Repository) []typesHTTP.GitRepository {
@@ -29,12 +29,12 @@ func formatRepos(repos []*github.Repository) []typesHTTP.GitRepository {
 }
 
 func (c *GithubUserClient) getRepoByName(ctx context.Context, installationID int, owner string, name string) (*github.Repository, error) {
-	installationClient, err := c.gitClient.newInstallationClient(ctx, strconv.Itoa(installationID))
+	installationClient, err := c.gitClient.NewGithubInstallationClient(ctx, strconv.Itoa(installationID))
 	if err != nil {
 		return nil, err
 	}
 
-	repo, resp, err := installationClient.githubClient.Repositories.Get(ctx, owner, name)
+	repo, resp, err := installationClient.Client.Repositories.Get(ctx, owner, name)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (c *GithubInstallationClient) RepoExists(ctx context.Context, repoID string
 		return false, err
 	}
 
-	_, resp, err := c.githubClient.Repositories.GetByID(ctx, int64(intID))
+	_, resp, err := c.Client.Repositories.GetByID(ctx, int64(intID))
 	if err != nil {
 		return false, err
 	}
@@ -150,7 +150,7 @@ func (c *GithubInstallationClient) GetProjectGitRepoData(ctx context.Context, pr
 		return nil, err
 	}
 
-	repo, resp, err := c.githubClient.Repositories.GetByID(ctx, int64(repoID))
+	repo, resp, err := c.Client.Repositories.GetByID(ctx, int64(repoID))
 	if err != nil {
 		return nil, err
 	}

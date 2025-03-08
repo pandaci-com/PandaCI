@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/rs/zerolog/log"
 	"github.com/pandaci-com/pandaci/types"
 	typesDB "github.com/pandaci-com/pandaci/types/database"
+	"github.com/rs/zerolog/log"
 )
 
 type gitFile struct {
@@ -42,7 +42,7 @@ func (c *GithubInstallationClient) GetWorkflowFiles(ctx context.Context, project
 		return nil, err
 	}
 
-	repo, resp, err := c.githubClient.Repositories.GetByID(ctx, int64(repoID))
+	repo, resp, err := c.Client.Repositories.GetByID(ctx, int64(repoID))
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (c *GithubInstallationClient) GetWorkflowFiles(ctx context.Context, project
 		return nil, fmt.Errorf("unable to get github repository, failed with StatusCode: %d ", resp.StatusCode)
 	}
 
-	tree, resp, err := c.githubClient.Git.GetTree(ctx, repo.GetOwner().GetLogin(), repo.GetName(), fmt.Sprintf("%s:.pandaci/", event.SHA), true)
+	tree, resp, err := c.Client.Git.GetTree(ctx, repo.GetOwner().GetLogin(), repo.GetName(), fmt.Sprintf("%s:.pandaci/", event.SHA), true)
 	if err != nil && (resp == nil || resp.StatusCode != 404) {
 		return nil, err
 	} else if resp.StatusCode == 404 {
