@@ -1,5 +1,5 @@
 // Note: This is normally "jsr:@pandaci/workflow", but we're just using the local source here.
-import { $, docker, cache } from "@pandaci/workflow";
+import { $, docker } from "@pandaci/workflow";
 import { env, initPnpm } from "../utils.ts";
 
 export function testFrontendTask() {
@@ -7,12 +7,6 @@ export function testFrontendTask() {
     "node:22",
     { name: "Linting and testing frontend" },
     async () => {
-
-      await cache({
-        keys: ["web/package.json", "web/pnpm-lock.yaml"],
-      })
-
-
       await initPnpm();
       await $`pnpm -F web lint`;
       await $`pnpm -F web sync`; // TODO - we should run svelte-kit check here too
