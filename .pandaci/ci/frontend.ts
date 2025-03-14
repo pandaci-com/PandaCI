@@ -45,7 +45,7 @@ export function deployDevFrontendTask() {
     const deploymentId =
       /https:\/\/([a-zA-Z0-9-]+)\.pandaci-app-dev\.pages\.dev/.exec(res)?.[1];
 
-    await $`pnpx wrangler kv:key put ${env.PANDACI_BRANCH} ${deploymentId} --remote --namespace-id=${env.CLOUDFLARE_KV_NAMESPACE_ID}`
+    await $`pnpx wrangler kv key put ${env.PANDACI_BRANCH} ${deploymentId} --remote --namespace-id=${env.CLOUDFLARE_KV_NAMESPACE_ID}`
       .env({
         CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
         CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
