@@ -2,6 +2,8 @@ package handlersGithub
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -9,9 +11,7 @@ import (
 	"sync"
 
 	"github.com/go-playground/webhooks/v6/github"
-	ghAPI "github.com/google/go-github/v68/github"
 	"github.com/labstack/echo/v4"
-	gitGithub "github.com/pandaci-com/pandaci/app/git/github"
 	"github.com/pandaci-com/pandaci/pkg/utils/env"
 	"github.com/pandaci-com/pandaci/types"
 	typesDB "github.com/pandaci-com/pandaci/types/database"
@@ -142,29 +142,21 @@ func (h *Handler) handlePullRequestEvent(ctx context.Context, payload github.Pul
 		return
 	}
 
+	requiresApproval := false
+
 	if payload.PullRequest.Head.Repo.ID != payload.Repository.ID {
 		log.Error().Msg("Forks are not currently supported")
 
-		ghClient := gitGithub.GithubClient{
-			Queries: h.queries,
-		}
+		userID := payload.PullRequest.Head.User.ID
 
-		installClient, err := ghClient.NewGithubInstallationClient(ctx, strconv.FormatInt(int64(payload.Installation.ID), 10))
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to get github installation client")
+		if _, err := h.queries.GetUserAccountByProviderAccountID(ctx,
+			strconv.FormatInt(int64(userID), 10),
+			typesDB.UserAccountTypeGithub); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			log.Error().Err(err).Msg("Failed to get user account")
 			return
+		} else {
+			requiresApproval = errors.Is(err, sql.ErrNoRows)
 		}
-
-		if _, _, err := installClient.Client.Repositories.CreateStatus(ctx, payload.Repository.Owner.Login, payload.Repository.Name, payload.PullRequest.Head.Sha, &ghAPI.RepoStatus{
-			State:       types.Pointer("failure"),
-			Description: types.Pointer("Pull requests from forks are not currently supported"),
-			Context:     types.Pointer("PandaCI"),
-			TargetURL:   types.Pointer("https://pandaci.com/docs/platform/workflows/env#git-fork-protection"),
-		}); err != nil {
-			log.Error().Err(err).Msg("Failed to create status")
-		}
-
-		return
 	}
 
 	projects, err := h.queries.GetProjectsByGitIntegrationID(ctx, gitProvider.ID, strconv.FormatInt(payload.Repository.ID, 10))
@@ -181,14 +173,15 @@ func (h *Handler) handlePullRequestEvent(ctx context.Context, payload github.Pul
 	}
 
 	triggerEvent := types.TriggerEvent{
-		Source:       types.TriggerEventSourceGithub,
-		SHA:          payload.PullRequest.Head.Sha,
-		Branch:       payload.PullRequest.Head.Ref,
-		Trigger:      trigger,
-		GitTitle:     payload.PullRequest.Title,
-		TargetBranch: &payload.PullRequest.Base.Ref,
-		PrNumber:     types.Pointer(int32(payload.PullRequest.Number)),
-		Committer:    h.getCommitter(ctx, payload.Installation.ID, payload.PullRequest.User.Login, payload.PullRequest.User.Login),
+		Source:           types.TriggerEventSourceGithub,
+		SHA:              payload.PullRequest.Head.Sha,
+		Branch:           payload.PullRequest.Head.Ref,
+		Trigger:          trigger,
+		GitTitle:         payload.PullRequest.Title,
+		TargetBranch:     &payload.PullRequest.Base.Ref,
+		PrNumber:         types.Pointer(int32(payload.PullRequest.Number)),
+		Committer:        h.getCommitter(ctx, payload.Installation.ID, "", payload.PullRequest.User.Login),
+		RequiresApproval: requiresApproval,
 	}
 
 	h.startProjects(triggerEvent, *projects)
