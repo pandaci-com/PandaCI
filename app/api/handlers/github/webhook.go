@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -74,6 +75,54 @@ func (h *Handler) startProjects(triggerEvent types.TriggerEvent, projects []type
 			}
 
 			log.Debug().Interface("workflows", workflows).Msg("Got workflows")
+
+			if triggerEvent.RequiresApproval {
+				log.Debug().Msg("Pull request requires approval")
+
+				ghClient := gitGithub.GithubClient{
+					Queries: h.queries,
+				}
+
+				installClient, err := ghClient.NewGithubInstallationClient(ctx, strconv.FormatInt(int64(payload.Installation.ID), 10))
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to get github installation client")
+					return
+				}
+
+				org, err := h.queries.Unsafe_GetOrgByID(ctx, project.OrgID)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to get org")
+					return
+				}
+
+				for _, def := range workflows {
+					h.queries.CreateWorkflowRun(ctx, &typesDB.WorkflowRun{
+						ProjectID:      project.ID,
+						Name:           def.RunWorkflowRequest.Name,
+						CommitterEmail: def.Committer.Email,
+						UserID:         def.Committer.UserID,
+						GitTitle:       &def.GitTitle,
+						GitSha:         def.RunWorkflowRequest.GitInfo.Sha,
+						GitBranch:      def.RunWorkflowRequest.GitInfo.Branch,
+						Trigger:        types.RunTriggerFromProto(def.RunWorkflowRequest.GetTrigger()),
+						PrNumber:       def.RunWorkflowRequest.PrNumber,
+						Runner:         "ubuntu-2x", // TODO - we need an unknown runner maybe,
+						Status:         types.RunStatusAwaitingApproval,
+					})
+
+					if _, _, err := installClient.Client.Repositories.CreateStatus(ctx, payload.Repository.Owner.Login, payload.Repository.Name, payload.PullRequest.Head.Sha, &ghAPI.RepoStatus{
+						State:       types.Pointer("failure"),
+						Description: types.Pointer("Requires approval to run."),
+						Context:     types.Pointer("PandaCI"),
+						TargetURL:   types.Pointer(fmt.Sprintf("https://app.pandaci.com/%s/%s/authorization", org, project.ID)),
+					}); err != nil {
+						log.Error().Err(err).Msg("Failed to create status")
+					}
+
+				}
+
+				return
+			}
 
 			runsDB, err := h.orchestrator.StartWorkflows(ctx, &project, workflows)
 			if err != nil {

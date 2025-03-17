@@ -52,8 +52,9 @@ func RunOutputFromProto(conclusion pb.Conclusion) (RunConclusion, error) {
 type RunStatus string
 
 const (
-	RunStatusQueued    RunStatus = "queued"
-	RunStatusRunning   RunStatus = "running"
-	RunStatusCompleted RunStatus = "completed"
-	RunStatusPending   RunStatus = "pending"
+	RunStatusQueued           RunStatus = "queued"
+	RunStatusRunning          RunStatus = "running"
+	RunStatusCompleted        RunStatus = "completed"
+	RunStatusPending          RunStatus = "pending"
+	RunStatusAwaitingApproval RunStatus = "awaiting-approval"
 )
