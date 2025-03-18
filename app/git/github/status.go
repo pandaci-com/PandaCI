@@ -25,6 +25,35 @@ func getStatus(status types.RunStatus, conclusion *types.RunConclusion) string {
 	return "failure"
 }
 
+func (c *GithubInstallationClient) PostAwaitingApprovalInRepo(ctx context.Context, org typesDB.OrgDB, project typesDB.Project, run typesDB.WorkflowRun) error {
+	if project.GitIntegrationID == "" {
+		log.Info().Msg("No GitIntegrationID found, skipping update")
+		return nil
+	} else if project.GitProviderRepoID == "" {
+		log.Info().Msg("No GitProviderRepoID found, skipping update")
+		return nil
+	}
+
+	repoID, err := strconv.ParseInt(project.GitProviderRepoID, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	repo, _, err := c.Client.Repositories.GetByID(ctx, repoID)
+	if err != nil {
+		return err
+	}
+
+	_, _, err = c.Client.Repositories.CreateStatus(ctx, repo.Owner.GetLogin(), repo.GetName(), run.GitSha, &github.RepoStatus{
+		TargetURL:   types.Pointer(fmt.Sprintf("https://app.pandaci.com/%s/%s/authorize/%d", org.Slug, project.Slug, run.Number)),
+		State:       types.Pointer("failure"),
+		Description: types.Pointer("Requires approval to run."),
+		Context:     types.Pointer(fmt.Sprintf("PandaCI — %s", run.Name)),
+	})
+
+	return err
+}
+
 func (c *GithubInstallationClient) UpdateRunInRepo(ctx context.Context, org typesDB.OrgDB, project typesDB.Project, run typesDB.WorkflowRun) error {
 
 	if project.GitIntegrationID == "" {

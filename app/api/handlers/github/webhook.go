@@ -2,6 +2,9 @@ package handlersGithub
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -9,9 +12,7 @@ import (
 	"sync"
 
 	"github.com/go-playground/webhooks/v6/github"
-	ghAPI "github.com/google/go-github/v68/github"
 	"github.com/labstack/echo/v4"
-	gitGithub "github.com/pandaci-com/pandaci/app/git/github"
 	"github.com/pandaci-com/pandaci/pkg/utils/env"
 	"github.com/pandaci-com/pandaci/types"
 	typesDB "github.com/pandaci-com/pandaci/types/database"
@@ -56,6 +57,54 @@ func (h *Handler) getCommitter(ctx context.Context, installID int64, email strin
 	}
 }
 
+func (h *Handler) createAwaitingApprovalRuns(
+	ctx context.Context,
+	project *typesDB.Project,
+	workflows []types.WorkflowDefintion,
+) error {
+	gitIntegration, err := h.queries.GetGitIntegration(ctx, project.GitIntegrationID)
+	if err != nil {
+		return fmt.Errorf("failed to get git integration: %w", err)
+	}
+
+	installClient, err := h.githubClient.NewInstallationClient(ctx, gitIntegration.ProviderID)
+	if err != nil {
+		return fmt.Errorf("failed to get github installation client: %w", err)
+	}
+
+	org, err := h.queries.Unsafe_GetOrgByID(ctx, project.OrgID)
+	if err != nil {
+		return fmt.Errorf("failed to get org: %w", err)
+	}
+
+	for _, def := range workflows {
+		run := typesDB.WorkflowRun{
+			ProjectID:      project.ID,
+			Name:           def.RunWorkflowRequest.Name,
+			CommitterEmail: def.Committer.Email,
+			UserID:         def.Committer.UserID,
+			GitTitle:       &def.GitTitle,
+			GitSha:         def.RunWorkflowRequest.GitInfo.Sha,
+			GitBranch:      def.RunWorkflowRequest.GitInfo.Branch,
+			Trigger:        types.RunTriggerFromProto(def.RunWorkflowRequest.GetTrigger()),
+			PrNumber:       def.RunWorkflowRequest.PrNumber,
+			Runner:         "ubuntu-2x", // TODO - we need an unknown runner maybe,
+			Status:         types.RunStatusAwaitingApproval,
+		}
+		if err := h.queries.CreateWorkflowRun(ctx, &run); err != nil {
+			log.Error().Err(err).Msg("Failed to create workflow run")
+			continue
+		}
+
+		if err := installClient.PostAwaitingApprovalInRepo(ctx, *org, *project, run); err != nil {
+			log.Error().Err(err).Msg("Failed to request pull request review")
+			continue
+		}
+	}
+
+	return nil
+}
+
 func (h *Handler) startProjects(triggerEvent types.TriggerEvent, projects []typesDB.Project) {
 
 	wg := sync.WaitGroup{}
@@ -74,6 +123,15 @@ func (h *Handler) startProjects(triggerEvent types.TriggerEvent, projects []type
 			}
 
 			log.Debug().Interface("workflows", workflows).Msg("Got workflows")
+
+			if triggerEvent.RequiresApproval {
+				log.Debug().Msg("Pull request requires approval")
+
+				if err := h.createAwaitingApprovalRuns(ctx, &project, workflows); err != nil {
+					log.Error().Err(err).Msg("Failed to create awaiting approval runs")
+				}
+				return
+			}
 
 			runsDB, err := h.orchestrator.StartWorkflows(ctx, &project, workflows)
 			if err != nil {
@@ -142,29 +200,21 @@ func (h *Handler) handlePullRequestEvent(ctx context.Context, payload github.Pul
 		return
 	}
 
+	requiresApproval := false
+
 	if payload.PullRequest.Head.Repo.ID != payload.Repository.ID {
 		log.Error().Msg("Forks are not currently supported")
 
-		ghClient := gitGithub.GithubClient{
-			Queries: h.queries,
-		}
+		userID := payload.PullRequest.Head.User.ID
 
-		installClient, err := ghClient.NewGithubInstallationClient(ctx, strconv.FormatInt(int64(payload.Installation.ID), 10))
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to get github installation client")
+		if _, err := h.queries.GetUserAccountByProviderAccountID(ctx,
+			strconv.FormatInt(int64(userID), 10),
+			typesDB.UserAccountTypeGithub); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			log.Error().Err(err).Msg("Failed to get user account")
 			return
+		} else {
+			requiresApproval = errors.Is(err, sql.ErrNoRows)
 		}
-
-		if _, _, err := installClient.Client.Repositories.CreateStatus(ctx, payload.Repository.Owner.Login, payload.Repository.Name, payload.PullRequest.Head.Sha, &ghAPI.RepoStatus{
-			State:       types.Pointer("failure"),
-			Description: types.Pointer("Pull requests from forks are not currently supported"),
-			Context:     types.Pointer("PandaCI"),
-			TargetURL:   types.Pointer("https://pandaci.com/docs/platform/workflows/env#git-fork-protection"),
-		}); err != nil {
-			log.Error().Err(err).Msg("Failed to create status")
-		}
-
-		return
 	}
 
 	projects, err := h.queries.GetProjectsByGitIntegrationID(ctx, gitProvider.ID, strconv.FormatInt(payload.Repository.ID, 10))
@@ -181,14 +231,15 @@ func (h *Handler) handlePullRequestEvent(ctx context.Context, payload github.Pul
 	}
 
 	triggerEvent := types.TriggerEvent{
-		Source:       types.TriggerEventSourceGithub,
-		SHA:          payload.PullRequest.Head.Sha,
-		Branch:       payload.PullRequest.Head.Ref,
-		Trigger:      trigger,
-		GitTitle:     payload.PullRequest.Title,
-		TargetBranch: &payload.PullRequest.Base.Ref,
-		PrNumber:     types.Pointer(int32(payload.PullRequest.Number)),
-		Committer:    h.getCommitter(ctx, payload.Installation.ID, payload.PullRequest.User.Login, payload.PullRequest.User.Login),
+		Source:           types.TriggerEventSourceGithub,
+		SHA:              payload.PullRequest.Head.Sha,
+		Branch:           payload.PullRequest.Head.Ref,
+		Trigger:          trigger,
+		GitTitle:         payload.PullRequest.Title,
+		TargetBranch:     &payload.PullRequest.Base.Ref,
+		PrNumber:         types.Pointer(int32(payload.PullRequest.Number)),
+		Committer:        h.getCommitter(ctx, payload.Installation.ID, "", payload.PullRequest.User.Login),
+		RequiresApproval: requiresApproval,
 	}
 
 	h.startProjects(triggerEvent, *projects)

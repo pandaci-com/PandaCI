@@ -120,7 +120,7 @@
 
 	{#if !installations.data?.installations.length && !installations.isLoading}
 		<div class="flex flex-col justify-center">
-			<Heading class="text-center">No installations found</Heading>
+			<Heading level={2} class="text-center">No installations found</Heading>
 			<Text class="text-center">Please add a github account to continue.</Text>
 			<Button
 				color="dark/white"

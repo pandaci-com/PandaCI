@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"connectrpc.com/connect"
+	"github.com/labstack/echo/v4"
 	middlewareLoaders "github.com/pandaci-com/pandaci/app/api/middleware/loaders"
 	grpcMiddleware "github.com/pandaci-com/pandaci/app/grpc/middleware"
 	"github.com/pandaci-com/pandaci/pkg/jwt"
@@ -18,7 +19,6 @@ import (
 	pbConnect "github.com/pandaci-com/pandaci/proto/go/v1/v1connect"
 	"github.com/pandaci-com/pandaci/types"
 	typesHTTP "github.com/pandaci-com/pandaci/types/http"
-	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
 )
 
@@ -101,6 +101,42 @@ func (h *Handler) GetWorkflowRunWithItems(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+
+	project, err := middlewareLoaders.GetProject(c)
+	if err != nil {
+		return err
+	}
+
+	commitURL := make(chan string)
+	go func() {
+		provider, err := h.queries.GetGitIntegration(c.Request().Context(), project.GitIntegrationID)
+		if err != nil {
+			log.Error().Err(err).Msg("getting provider")
+			return
+		}
+
+		gitClient, err := h.gitHandler.GetClient(provider.Type)
+		if err != nil {
+			log.Error().Err(err).Msg("getting git client")
+			return
+		}
+
+		installationClient, err := gitClient.NewInstallationClient(c.Request().Context(), provider.ProviderID)
+		if err != nil {
+			log.Error().Err(err).Msg("getting installation client")
+			return
+		}
+
+		repo, err := installationClient.GetProjectGitRepoData(c.Request().Context(), *project)
+		if err != nil {
+			log.Error().Err(err).Msg("getting repo")
+			return
+		}
+
+		commitURL <- gitClient.NewInstallationClient(c.Request().Context(), project.Git).GetCommitURL(c.Request().Context(), project.RepoID, workflowRun.GitSha)
+
+		// h.gitHandler.GetClient(project.)
+	}()
 
 	jobs, err := h.queries.GetWorkflowRunJobsHTTP(c.Request().Context(), workflowRun)
 	if err != nil {

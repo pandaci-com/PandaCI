@@ -1,4 +1,4 @@
-CREATE TYPE run_status_enum AS ENUM ('queued', 'running', 'completed', 'pending');
+CREATE TYPE run_status_enum AS ENUM ('queued', 'running', 'completed', 'pending', 'awaiting-approval');
 CREATE TYPE run_conclusion_enum AS ENUM ('success', 'failure', 'cancelled', 'skipped');
 
 CREATE TYPE run_trigger_enum AS ENUM ('push', 'pull_request-opened', 'pull_request-synchronize', 'pull_request-closed', 'manual');

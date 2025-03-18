@@ -8,14 +8,15 @@ type Committer struct {
 }
 
 type TriggerEvent struct {
-	Source       TriggerEventSource
-	SHA          string
-	GitTitle     string
-	Branch       string
-	TargetBranch *string
-	PrNumber     *int32
-	Trigger      RunTrigger
-	Committer    Committer
+	Source           TriggerEventSource
+	SHA              string
+	GitTitle         string
+	Branch           string
+	TargetBranch     *string
+	PrNumber         *int32
+	Trigger          RunTrigger
+	Committer        Committer
+	RequiresApproval bool
 }
 
 const (
