@@ -42,6 +42,7 @@ type InstallationClient interface {
 	UpdateRunInRepo(ctx context.Context, org typesDB.OrgDB, project typesDB.Project, run typesDB.WorkflowRun) error
 	RepoExists(ctx context.Context, repoID string) (bool, error)
 	GetUserIDFromUsername(ctx context.Context, username string) (int64, error)
+	PostAwaitingApprovalInRepo(ctx context.Context, org typesDB.OrgDB, project typesDB.Project, run typesDB.WorkflowRun) error
 }
 
 type GitOAuthErrorType string
